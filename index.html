@@ -4596,5 +4596,54 @@
             }
         });
     </script>
+<!-- Firebase + Firestore -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, addDoc, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "YOUR_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "XXXX",
+    appId: "XXXX"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  const form     = document.getElementById('contactForm');
+  const statusEl = document.getElementById('status');
+  const btn      = document.getElementById('sendBtn');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    btn.disabled = true;
+    statusEl.textContent = 'جارٍ الإرسال...';
+
+    try {
+      const data = {
+        type: 'contact',
+        name: document.getElementById('name').value.trim().slice(0,100),
+        email: document.getElementById('email').value.trim().slice(0,200),
+        message: document.getElementById('message').value.trim().slice(0,5000),
+        createdAt: serverTimestamp(),
+        userAgent: navigator.userAgent
+      };
+
+      await addDoc(collection(db, 'messages'), data);
+      statusEl.textContent = 'تم الإرسال بنجاح ✅';
+      form.reset();
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'حصل خطأ أثناء الإرسال. جرّب تاني.';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+</script>
+
 </body>
 </html>
