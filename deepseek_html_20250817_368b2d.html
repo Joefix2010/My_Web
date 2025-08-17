@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚀 Taf3el - Ultimate Social Media Services Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <style>
+        /* ... (جميع أنماط CSS السابقة تبقى كما هي) ... */
+    </style>
+</head>
+<body class="gradient-bg text-white min-h-screen">
+    <!-- ... (بقية الهيكل HTML يبقى كما هو) ... -->
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyD2YvqKdQvMfX7fJv9QdZc0Zg7jKpXqYJ0",
+            authDomain: "taf3el-platform.firebaseapp.com",
+            projectId: "taf3el-platform",
+            storageBucket: "taf3el-platform.appspot.com",
+            messagingSenderId: "123456789012",
+            appId: "1:123456789012:web:abcdef1234567890"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+
+        // Global variables
+        let currentUser = null;
+        let isAdmin = false;
+        let serviceCosts = {
+            // ... (تكاليف الخدمات كما هي) ...
+        };
+
+        // Service data
+        const serviceData = {
+            // ... (بيانات الخدمات كما هي) ...
+        };
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            initFirebase();
+            loadInitialData();
+            
+            // Add event listeners
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            document.getElementById('signupForm').addEventListener('submit', handleSignup);
+            // ... (بقية المستمعين للأحداث) ...
+            
+            // Update discount timer
+            setInterval(updateDiscountTimer, 1000);
+            updateDiscountTimer();
+        });
+
+        // Initialize Firebase and check auth state
+        function initFirebase() {
+            auth.onAuthStateChanged(user => {
+                if (user) {
+                    // User is signed in
+                    loadUserData(user.uid);
+                } else {
+                    // User is signed out
+                    hideUserProfile();
+                }
+            });
+        }
+
+        // Load initial data from Firestore
+        async function loadInitialData() {
+            try {
+                // Load global settings
+                const settingsDoc = await db.collection('settings').doc('global').get();
+                if (settingsDoc.exists) {
+                    const settings = settingsDoc.data();
+                    discountActive = settings.discountActive;
+                    discountEndDate = settings.discountEndDate.toDate();
+                    
+                    // Set discount end date
+                    const discountEndEl = document.getElementById('discountEndDate');
+                    if (discountEndEl) {
+                        discountEndEl.textContent = discountEndDate.toLocaleDateString('ar-EG');
+                    }
+                }
+                
+                // Load service costs
+                const costsDoc = await db.collection('settings').doc('serviceCosts').get();
+                if (costsDoc.exists) {
+                    Object.assign(serviceCosts, costsDoc.data());
+                }
+            } catch (error) {
+                console.error("Error loading initial data:", error);
+                showNotification('حدث خطأ أثناء تحميل البيانات الأولية', 'error');
+            }
+        }
+
+        // Load user data from Firestore
+        async function loadUserData(userId) {
+            try {
+                const userDoc = await db.collection('users').doc(userId).get();
+                if (userDoc.exists) {
+                    currentUser = {
+                        uid: userId,
+                        ...userDoc.data()
+                    };
+                    
+                    // Update UI
+                    document.getElementById('userName').textContent = currentUser.name;
+                    document.getElementById('userInitial').textContent = currentUser.name.charAt(0);
+                    document.getElementById('userPhone').textContent = currentUser.phone;
+                    
+                    updateBalanceDisplay();
+                    showUserProfile();
+                    
+                    // Check if user is admin
+                    isAdmin = currentUser.isAdmin || false;
+                    if (isAdmin) {
+                        showAdminAccess();
+                    }
+                    
+                    // Load user orders
+                    loadUserOrdersPage();
+                    
+                    // Update support badge
+                    updateSupportBadge();
+                }
+            } catch (error) {
+                console.error("Error loading user data:", error);
+                showNotification('حدث خطأ أثناء تحميل بيانات المستخدم', 'error');
+            }
+        }
+
+        // Authentication functions
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const phone = document.getElementById('loginPhone').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                // Firebase authentication
+                const userCredential = await auth.signInWithEmailAndPassword(`${phone}@taf3el.com`, password);
+                const user = userCredential.user;
+                
+                // Load user data
+                await loadUserData(user.uid);
+                
+                hideLoginModal();
+                showNotification('تم تسجيل الدخول بنجاح', 'success');
+                e.target.reset();
+            } catch (error) {
+                console.error("Login error:", error);
+                showNotification('بيانات الدخول غير صحيحة', 'error');
+            }
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            
+            const name = document.getElementById('signupName').value;
+            const phone = document.getElementById('signupPhone').value;
+            const password = document.getElementById('signupPassword').value;
+            const confirmPassword = document.getElementById('signupConfirmPassword').value;
+            
+            // Validate passwords
+            if (password !== confirmPassword) {
+                showNotification('كلمات المرور غير متطابقة', 'error');
+                return;
+            }
+            
+            try {
+                // Create user with Firebase auth
+                const userCredential = await auth.createUserWithEmailAndPassword(`${phone}@taf3el.com`, password);
+                const user = userCredential.user;
+                
+                // Create user document in Firestore
+                await db.collection('users').doc(user.uid).set({
+                    name: name,
+                    phone: phone,
+                    balance: 5, // Initial bonus
+                    referralCode: generateReferralCode(),
+                    registrationDate: new Date().toISOString(),
+                    isAdmin: false
+                });
+                
+                // Load user data
+                await loadUserData(user.uid);
+                
+                hideSignupModal();
+                showNotification('تم إنشاء الحساب بنجاح! ابدأ الآن بطلب خدماتك الأولى.', 'success');
+                e.target.reset();
+            } catch (error) {
+                console.error("Signup error:", error);
+                showNotification('حدث خطأ أثناء إنشاء الحساب', 'error');
+            }
+        }
+
+        // Order functions
+        async function handleServiceOrder(e) {
+            e.preventDefault();
+
+            if (!currentUser) {
+                showNotification('يجب تسجيل الدخول أولاً لإنشاء طلب', 'error');
+                return;
+            }
+            
+            const form = e.target;
+            const serviceId = form.dataset.serviceId;
+            const service = serviceData[serviceId];
+            
+            if (!service) {
+                showNotification('خطأ في بيانات الخدمة', 'error');
+                return;
+            }
+            
+            const contentLink = document.getElementById('contentLink').value;
+            const quantity = parseInt(document.getElementById('quantity').value);
+            const notes = document.getElementById('orderNotes').value;
+            
+            if (quantity < service.minQuantity) {
+                showNotification(`الحد الأدنى للكمية: ${service.minQuantity.toLocaleString()}`, 'error');
+                return;
+            }
+            
+            // Calculate price
+            let totalPrice;
+            if (serviceId.startsWith("package_")) {
+                totalPrice = service.price * quantity;
+            } else {
+                const baseQuantity = parseInt(serviceId.includes('views') ? '10000' : 
+                                           serviceId.includes('likes') ? '1000' : 
+                                           serviceId.includes('saves') ? '100' : 
+                                           serviceId.includes('shares') ? '100' : 
+                                           serviceId.includes('followers') ? '1000' : '1');
+                totalPrice = (service.price / baseQuantity) * quantity;
+            }
+            
+            const finalPrice = parseFloat(totalPrice.toFixed(2));
+
+            try {
+                // Check balance
+                if (currentUser.balance < finalPrice) {
+                    showNotification(`رصيدك غير كافٍ. الرصيد الحالي: ${currentUser.balance.toFixed(2)} جنيه`, 'error');
+                    return;
+                }
+
+                // Deduct balance
+                const newBalance = parseFloat((currentUser.balance - finalPrice).toFixed(2));
+                await db.collection('users').doc(currentUser.uid).update({
+                    balance: newBalance
+                });
+                currentUser.balance = newBalance;
+                updateBalanceDisplay();
+
+                // Create order
+                const order = {
+                    serviceId: serviceId,
+                    serviceName: service.title,
+                    contentLink: contentLink,
+                    quantity: quantity,
+                    totalPrice: finalPrice,
+                    notes: notes,
+                    status: 'pending',
+                    userId: currentUser.uid,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                };
+
+                // Save to Firestore
+                const orderRef = await db.collection('orders').add(order);
+                
+                // Add to admin notifications
+                await db.collection('adminNotifications').add({
+                    type: 'new_order',
+                    orderId: orderRef.id,
+                    userId: currentUser.uid,
+                    userName: currentUser.name,
+                    amount: finalPrice,
+                    createdAt: new Date().toISOString(),
+                    status: 'unread'
+                });
+
+                closeServiceModal();
+                showNotification(`تم إرسال طلبك وخصم ${finalPrice} جنيه من رصيدك بنجاح!`, 'success');
+                form.reset();
+            } catch (error) {
+                console.error("Order error:", error);
+                showNotification('حدث خطأ أثناء إنشاء الطلب', 'error');
+            }
+        }
+
+        // Load user orders
+        async function loadUserOrdersPage() {
+            const ordersList = document.getElementById('userOrdersList');
+            
+            if (!currentUser) {
+                ordersList.innerHTML = '<p class="text-center text-slate-400">يجب تسجيل الدخول لعرض الطلبات</p>';
+                return;
+            }
+            
+            try {
+                const snapshot = await db.collection('orders')
+                    .where('userId', '==', currentUser.uid)
+                    .orderBy('createdAt', 'desc')
+                    .get();
+                
+                const orders = [];
+                snapshot.forEach(doc => {
+                    orders.push({
+                        id: doc.id,
+                        ...doc.data()
+                    });
+                });
+                
+                if (orders.length === 0) {
+                    ordersList.innerHTML = `
+                        <div class="text-center py-12">
+                            <div class="text-6xl mb-4">📦</div>
+                            <h3 class="text-xl font-semibold mb-2">لا توجد طلبات حتى الآن</h3>
+                            <p class="text-slate-400 mb-4">ابدأ بطلب خدمة من صفحة الخدمات</p>
+                            <button onclick="scrollToServices(); showPage('home');" class="btn-primary px-6 py-2 rounded-lg">
+                                تصفح الخدمات
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                const filteredOrders = orders;
+                ordersList.innerHTML = filteredOrders.map(order => `
+                    <div class="order-card">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h4 class="font-semibold text-lg">${order.serviceName}</h4>
+                                <p class="text-slate-400 text-sm">طلب #${order.id}</p>
+                            </div>
+                            <span class="badge badge-${getStatusColor(order.status)}">${getStatusText(order.status)}</span>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <span class="text-slate-400 text-sm">الكمية:</span>
+                                <span class="font-semibold">${order.quantity.toLocaleString()}</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 text-sm">السعر:</span>
+                                <span class="font-semibold text-green-400">${order.totalPrice.toFixed(2)} جنيه</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <span class="text-slate-400 text-sm">الرابط:</span>
+                            <a href="${order.contentLink}" target="_blank" class="text-blue-400 hover:underline text-sm break-all">
+                                ${order.contentLink}
+                            </a>
+                        </div>
+                        
+                        ${order.notes ? `
+                            <div class="mb-4">
+                                <span class="text-slate-400 text-sm">ملاحظات:</span>
+                                <p class="text-sm">${order.notes}</p>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="text-slate-400 text-sm">
+                            تاريخ الطلب: ${new Date(order.createdAt).toLocaleString('ar-EG')}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error("Error loading orders:", error);
+                ordersList.innerHTML = '<p class="text-center text-slate-400">حدث خطأ أثناء تحميل الطلبات</p>';
+            }
+        }
+
+        // Balance functions
+        async function handleBalanceCharge(e) {
+            e.preventDefault();
+            
+            let amount, paymentMethod, transactionId, transferTo;
+            
+            // ... (جمع بيانات الشحن كما كانت) ...
+            
+            try {
+                const balanceRequest = {
+                    type: 'balance_charge',
+                    amount: amount,
+                    paymentMethod: paymentMethod,
+                    transactionId: transactionId,
+                    transferTo: transferTo,
+                    userId: currentUser.uid,
+                    createdAt: new Date().toISOString(),
+                    status: 'pending'
+                };
+                
+                // Save to Firestore
+                await db.collection('balanceRequests').add(balanceRequest);
+                
+                // Add to admin notifications
+                await db.collection('adminNotifications').add({
+                    type: 'balance_request',
+                    userId: currentUser.uid,
+                    userName: currentUser.name,
+                    amount: amount,
+                    createdAt: new Date().toISOString(),
+                    status: 'unread'
+                });
+                
+                showNotification(`
+                    تم إرسال طلب الشحن! 
+                    الرجاء التحويل إلى أحد الأرقام التالية: 
+                    01013062296 أو 01554887765
+                    بعد التحويل، سيقوم فريقنا بتأكيد شحن رصيدك في أقرب وقت.
+                    شكرًا لصبرك.
+                `, 'info');
+                
+                e.target.reset();
+                if (e.target.id === 'balanceForm') {
+                    document.getElementById('vodafoneNumbers').classList.add('hidden');
+                    hideBalanceModal();
+                } else {
+                    document.getElementById('balancePageVodafoneNumbers').classList.add('hidden');
+                }
+            } catch (error) {
+                console.error("Balance charge error:", error);
+                showNotification('حدث خطأ أثناء إرسال طلب الشحن', 'error');
+            }
+        }
+
+        // Admin functions
+        async function handleAdminLogin(e) {
+            e.preventDefault();
+            
+            const password = document.getElementById('adminPassword').value;
+            
+            try {
+                // Check admin credentials in Firestore
+                const snapshot = await db.collection('admins')
+                    .where('password', '==', password)
+                    .limit(1)
+                    .get();
+                
+                if (!snapshot.empty) {
+                    isAdmin = true;
+                    localStorage.setItem('isAdmin', 'true');
+                    showAdminAccess();
+                    hideAdminModal();
+                    showNotification('تم تسجيل دخول المدير بنجاح', 'success');
+                    showAdminDashboard();
+                } else {
+                    showNotification('كلمة مرور خاطئة', 'error');
+                }
+            } catch (error) {
+                console.error("Admin login error:", error);
+                showNotification('حدث خطأ أثناء تسجيل دخول المدير', 'error');
+            }
+            
+            e.target.reset();
+        }
+
+        async function loadAdminStats() {
+            try {
+                // New orders
+                const newOrdersSnapshot = await db.collection('orders')
+                    .where('status', '==', 'pending')
+                    .get();
+                document.getElementById('adminNewOrdersCount').textContent = newOrdersSnapshot.size;
+                
+                // Active orders
+                const activeOrdersSnapshot = await db.collection('orders')
+                    .where('status', '==', 'processing')
+                    .get();
+                document.getElementById('adminActiveOrders').textContent = activeOrdersSnapshot.size;
+                
+                // Completed orders
+                const completedOrdersSnapshot = await db.collection('orders')
+                    .where('status', '==', 'completed')
+                    .get();
+                document.getElementById('adminCompletedOrders').textContent = completedOrdersSnapshot.size;
+                
+                // Total users
+                const usersSnapshot = await db.collection('users').get();
+                document.getElementById('adminTotalUsers').textContent = usersSnapshot.size;
+                
+                // New messages
+                const newMessagesSnapshot = await db.collection('supportTickets')
+                    .where('status', '==', 'open')
+                    .get();
+                document.getElementById('adminNewMessagesCount').textContent = newMessagesSnapshot.size;
+                
+                // Total balance charged
+                const completedBalanceRequests = await db.collection('balanceRequests')
+                    .where('status', '==', 'completed')
+                    .get();
+                
+                let totalBalance = 0;
+                completedBalanceRequests.forEach(doc => {
+                    totalBalance += doc.data().amount;
+                });
+                document.getElementById('adminTotalBalance').textContent = totalBalance.toFixed(2);
+                
+                // New balance requests
+                const newBalanceRequests = await db.collection('balanceRequests')
+                    .where('status', '==', 'pending')
+                    .get();
+                document.getElementById('adminNewBalanceRequests').textContent = newBalanceRequests.size;
+            } catch (error) {
+                console.error("Error loading admin stats:", error);
+                showNotification('حدث خطأ أثناء تحميل إحصائيات المدير', 'error');
+            }
+        }
+
+        async function approveOrder(orderId) {
+            try {
+                // Update order status
+                await db.collection('orders').doc(orderId).update({
+                    status: 'processing',
+                    updatedAt: new Date().toISOString()
+                });
+                
+                // Add notification to user
+                const orderDoc = await db.collection('orders').doc(orderId).get();
+                const order = orderDoc.data();
+                
+                await db.collection('userNotifications').add({
+                    userId: order.userId,
+                    type: 'order_update',
+                    message: `تم قبول طلبك #${orderId} وبدء التنفيذ`,
+                    createdAt: new Date().toISOString(),
+                    read: false
+                });
+                
+                loadNewOrdersTab();
+                loadActiveOrdersTab();
+                showNotification('تم قبول الطلب وبدء التنفيذ', 'success');
+            } catch (error) {
+                console.error("Error approving order:", error);
+                showNotification('حدث خطأ أثناء قبول الطلب', 'error');
+            }
+        }
+
+        // ... (بقية الدوال المعدلة للتعامل مع Firestore) ...
+
+        // Utility functions
+        function logout() {
+            auth.signOut().then(() => {
+                currentUser = null;
+                isAdmin = false;
+                localStorage.removeItem('isAdmin');
+                hideUserProfile();
+                hideAdminAccess();
+                showPage('home');
+                showNotification('تم تسجيل الخروج بنجاح', 'success');
+            });
+        }
+
+        // ... (بقية الدوال المساعدة تبقى كما هي مع تعديلات طفيفة) ...
+    </script>
+</body>
+</html>
