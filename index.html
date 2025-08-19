@@ -8,7 +8,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700&family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* جميع أنماط CSS من الأصل */
         :root {
             --primary-gradient: linear-gradient(135deg, #3b82f6, #1d4ed8);
             --success-gradient: linear-gradient(135deg, #059669, #047857);
@@ -1567,7 +1566,7 @@
                             <div class="flex justify-center items-center">
                                 <span class="text-2xl font-bold text-center text-green-400 mb-4">10ج</span>
                                 <span class="original-price">20ج</span>
-                                <span class="disc discount-percent">50%</span>
+                                <span class="discount-percent">50%</span>
                             </div>
                             <div class="discount-banner">
                                 خصم 50%! ينتهي في <span class="discount-timer"></span>
@@ -2324,23 +2323,6 @@
         </div>
     </main>
 
-    <!-- ===== Firebase SDKs (inserted) ===== -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-    <script>
-      // Firebase config - REPLACE with your actual keys
-      const firebaseConfig = {
-        apiKey: "AIzaSyD1d1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1",
-        authDomain: "taf3el-41.firebaseapp.com",
-        projectId: "taf3el-41",
-        storageBucket: "taf3el-41.appspot.com",
-        messagingSenderId: "123456789012",
-        appId: "1:123456789012:web:abc123abc123abc123abc"
-      };
-      firebase.initializeApp(firebaseConfig);
-      window.db = firebase.firestore();
-    </script>
-
     <script>
         // Global variables
         let currentUser = null;
@@ -2708,7 +2690,7 @@
             currentUser = {
                 name: name,
                 phone: phone,
-                balance: 5, // مكافأة التسجيل 5 جنيه
+                balance: 0,
                 referralCode: generateReferralCode()
             };
             
@@ -2716,7 +2698,7 @@
             allUsersData[phone] = {
                 name: name,
                 password: password,
-                balance: 5,
+                balance: 0,
                 registrationDate: new Date().toLocaleString('ar-EG'),
                 referralCode: currentUser.referralCode
             };
@@ -2741,30 +2723,22 @@
         }
 
         // Data management functions
-        async function saveUserData() {
-            // تحديث التخزين المحلي (للاستخدام داخل الصفحة فقط)
+        function saveUserData() {
             if (currentUser) {
                 localStorage.setItem('currentUser', JSON.stringify(currentUser));
-            }
-            localStorage.setItem('adminOrders', JSON.stringify(adminOrders));
-            localStorage.setItem('adminMessages', JSON.stringify(adminMessages));
-            
-            // حفظ بيانات المستخدم في Firestore
-            try {
-                if (currentUser && window.db) {
-                    await db.collection('users').doc(currentUser.phone).set({
-                        name: currentUser.name,
-                        phone: currentUser.phone,
-                        balance: currentUser.balance,
-                        referralCode: currentUser.referralCode || null,
-                        lastActive: firebase.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
-                }
-            } catch (err) {
-                console.error('Firestore saveUserData error:', err);
+                localStorage.setItem('userOrders', JSON.stringify(userOrders));
+                localStorage.setItem('adminOrders', JSON.stringify(adminOrders));
+                localStorage.setItem('adminMessages', JSON.stringify(adminMessages));
+                localStorage.setItem('isAdmin', isAdmin.toString());
+                localStorage.setItem('balanceRequests', JSON.stringify(balanceRequests));
+                localStorage.setItem('userEdits', JSON.stringify(userEdits));
+                localStorage.setItem('totalBalanceCharged', totalBalanceCharged.toString());
+                localStorage.setItem('serviceCosts', JSON.stringify(serviceCosts));
+                localStorage.setItem('profitHistory', JSON.stringify(profitHistory));
+                localStorage.setItem('discountEndDate', discountEndDate.toString());
             }
         }
-        
+
         function loadUserData() {
             const savedUser = localStorage.getItem('currentUser');
             const savedOrders = localStorage.getItem('userOrders');
@@ -2861,77 +2835,6 @@
             }
         }
 
-        /* ================= Firebase helper functions ================= */
-        async function updateOrderStatusInFirestore(localId, newStatus) {
-            try {
-                if (!window.db) return;
-                const q = await db.collection('orders').where('id', '==', localId).limit(1).get();
-                if (!q.empty) {
-                    await q.docs[0].ref.update({ status: newStatus });
-                }
-            } catch (err) { console.error('Firestore update order status error:', err); }
-        }
-
-        async function updateMessageInFirestore(localId, patch) {
-            try {
-                if (!window.db) return;
-                const q = await db.collection('messages').where('id', '==', localId).limit(1).get();
-                if (!q.empty) {
-                    await q.docs[0].ref.update(patch);
-                }
-            } catch (err) { console.error('Firestore update message error:', err); }
-        }
-
-        let unsubUserMsgs = null;
-        function subscribeUserMessages(phone) {
-            try {
-                if (!window.db) return;
-                if (unsubUserMsgs) unsubUserMsgs();
-                unsubUserMsgs = db.collection('messages')
-                    .where('user', '==', phone)
-                    .onSnapshot((snap) => {
-                        const msgs = [];
-                        snap.forEach(doc => msgs.push(doc.data()));
-                        adminMessages = msgs;
-                        // تحديث واجهة المستخدم لقسم الدعم في حساب المستخدم
-                        if (document.getElementById('supportSection')) {
-                            loadPreviousMessages();
-                        }
-                        updateSupportBadge();
-                    });
-            } catch (err) { console.error('Firestore subscribe user messages error:', err); }
-        }
-
-        let unsubOrders = null, unsubMessages = null;
-        function subscribeAdminCollections() {
-            try {
-                if (!window.db) return;
-                if (unsubOrders) unsubOrders();
-                if (unsubMessages) unsubMessages();
-                unsubOrders = db.collection('orders')
-                    .onSnapshot((snap) => {
-                        const arr = [];
-                        snap.forEach(doc => arr.push(doc.data()));
-                        adminOrders = arr;
-                        // إعادة تحميل التابات المهمة
-                        loadNewOrdersTab();
-                        loadActiveOrdersTab();
-                        loadCompletedOrdersTab();
-                        loadAdminStats();
-                    });
-                unsubMessages = db.collection('messages')
-                    .onSnapshot((snap) => {
-                        const arr = [];
-                        snap.forEach(doc => arr.push(doc.data()));
-                        adminMessages = arr;
-                        updateSupportBadge();
-                        // إذا كان المدير يعرض تبويب الرسائل الآن، حدّثه
-                        loadContactMessagesTab();
-                    });
-            } catch (err) { console.error('Firestore subscribe admin collections error:', err); }
-        }
-        /* ================= End Firebase helpers ================= */
-
         // UI functions
         function showPage(pageId) {
             // Hide all pages
@@ -3010,7 +2913,6 @@
         function showAdminModal() {
             if (isAdmin) {
                 showAdminDashboard();
-                subscribeAdminCollections();
             } else {
                 document.getElementById('adminModal').classList.remove('hidden');
             }
@@ -3141,7 +3043,7 @@
             document.getElementById("totalPrice").textContent = `${totalPrice.toFixed(2)} جنيه`;
         }
 
-        async function handleServiceOrder(e) {
+        function handleServiceOrder(e) {
             e.preventDefault();
 
             if (!currentUser) {
@@ -3209,21 +3111,6 @@
             
             saveAllUsersData();
             saveUserData();
-            // مزامنة مع Firestore
-            try {
-                if (window.db) {
-                    await db.collection('orders').add({
-                        ...order,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    await db.collection('users').doc(currentUser.phone).set({
-                        balance: currentUser.balance
-                    }, { merge: true });
-                }
-            } catch (err) {
-                console.error('Firestore add order error:', err);
-            }
-            
             
             closeServiceModal();
             showNotification(`تم إرسال طلبك وخصم ${finalPrice} جنيه من رصيدك بنجاح!`, 'success');
@@ -3317,7 +3204,7 @@
         }
 
         // الدالة المعدلة لإرسال الرسائل
-        async function handleContactForm(e) {
+        function handleContactForm(e) {
             e.preventDefault();
 
             if (!currentUser) {
@@ -3350,18 +3237,6 @@
             adminMessages.push(contactMessage);
             saveUserData();
 
-            // مزامنة الرسالة مع Firestore
-            try {
-                if (window.db) {
-                    await db.collection('messages').add({
-                        ...contactMessage,
-                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                }
-            } catch (err) {
-                console.error('Firestore add message error:', err);
-            }
-            
             showNotification('تم إرسال رسالتك بنجاح! سنتواصل معك قريباً', 'success');
             e.target.reset();
             
@@ -4183,7 +4058,7 @@
             loadCustomersTab();
         }
 
-        async function approveOrder(orderId) {
+        function approveOrder(orderId) {
             const order = adminOrders.find(o => o.id === orderId);
             if (order) {
                 order.status = 'processing';
@@ -4193,8 +4068,6 @@
                     userOrder.status = 'processing';
                 }
                 
-                // تحديث حالة الطلب في Firestore
-                await updateOrderStatusInFirestore(orderId, 'processing');
                 saveUserData();
                 loadNewOrdersTab();
                 loadActiveOrdersTab();
@@ -4202,7 +4075,7 @@
             }
         }
 
-        async function rejectOrder(orderId) {
+        function rejectOrder(orderId) {
             const orderIndex = adminOrders.findIndex(o => o.id === orderId);
             if (orderIndex === -1) return;
 
@@ -4230,14 +4103,12 @@
                 userOrder.status = 'cancelled';
             }
             
-            // تحديث حالة الطلب في Firestore
-            await updateOrderStatusInFirestore(orderId, 'cancelled');
             saveUserData();
             loadNewOrdersTab();
             showNotification(`تم رفض الطلب #${orderId} وإعادة مبلغ ${order.totalPrice} جنيه لرصيد المستخدم.`, 'info');
         }
 
-        async function completeOrder(orderId) {
+        function completeOrder(orderId) {
             const order = adminOrders.find(o => o.id === orderId);
             if (order) {
                 order.status = 'completed';
@@ -4246,8 +4117,6 @@
                 if (userOrder) {
                     userOrder.status = 'completed';
                 }
-                // تحديث الحالة في Firestore
-                await updateOrderStatusInFirestore(orderId, 'completed');
                 
                 // تسجيل الربح في التاريخ
                 addToProfitHistory(order);
@@ -4259,7 +4128,7 @@
             }
         }
         
-        async function cancelOrder(orderId) {
+        function cancelOrder(orderId) {
             const order = adminOrders.find(o => o.id === orderId);
             if (order) {
                 order.status = 'cancelled';
@@ -4283,8 +4152,6 @@
                     }
                 }
                 
-                // تحديث حالة الطلب في Firestore
-                await updateOrderStatusInFirestore(orderId, 'cancelled');
                 saveUserData();
                 loadActiveOrdersTab();
                 loadUserOrdersPage();
@@ -4430,7 +4297,7 @@
             loadCustomersTab();
         }
 
-        async function sendReply(messageId) {
+        function sendReply(messageId) {
             const replyContent = document.getElementById(`reply-${messageId}`).value;
             if (!replyContent) return;
             
@@ -4448,32 +4315,26 @@
             
             saveUserData();
             loadContactMessagesTab();
-            // تحديث الرسالة في Firestore
-            await updateMessageInFirestore(messageId, { replies: message.replies });
             showNotification('تم إرسال الرد بنجاح', 'success');
         }
 
-        async function completeMessage(messageId) {
+        function completeMessage(messageId) {
             const messageIndex = adminMessages.findIndex(msg => msg.id == messageId);
             if (messageIndex === -1) return;
             
             adminMessages[messageIndex].status = 'completed';
             saveUserData();
-            // تحديث في Firestore
-            await updateMessageInFirestore(messageId, { status: 'completed' });
             loadContactMessagesTab();
             loadCompletedMessagesTab();
             showNotification('تم تمييز الرسالة كمكتملة', 'success');
         }
 
-        async function reopenMessage(messageId) {
+        function reopenMessage(messageId) {
             const messageIndex = adminMessages.findIndex(msg => msg.id == messageId);
             if (messageIndex === -1) return;
             
             adminMessages[messageIndex].status = 'new';
             saveUserData();
-            // تحديث في Firestore
-            await updateMessageInFirestore(messageId, { status: 'new' });
             loadCompletedMessagesTab();
             loadContactMessagesTab();
             showNotification('تم إعادة فتح الرسالة', 'info');
