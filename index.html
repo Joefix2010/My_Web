@@ -4652,5 +4652,94 @@ if (!firebase.apps.length) {
 const db = firebase.firestore();
 </script>
 
+
+<!-- ================= FIREBASE ================= -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, collection, addDoc, setDoc, doc, getDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDj4nWEcooJzgaBjzP1ALCAJYL_wKTKGfE",
+  authDomain: "egy-taf3el.firebaseapp.com",
+  projectId: "egy-taf3el",
+  storageBucket: "egy-taf3el.firebasestorage.app",
+  messagingSenderId: "837756228710",
+  appId: "1:837756228710:web:ef370b09f8efc03f7c89a7",
+  measurementId: "G-TG9ZBVKEC0"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// SIGNUP
+document.getElementById("signupForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = signupName.value;
+  const phone = signupPhone.value;
+  const password = signupPassword.value;
+  const email = phone + "@taf3el.com";
+
+  const cred = await createUserWithEmailAndPassword(auth, email, password);
+  await setDoc(doc(db, "users", cred.user.uid), {
+    name, phone, balance: 5, createdAt: serverTimestamp()
+  });
+  alert("Account created successfully");
+  location.reload();
+});
+
+// LOGIN
+document.getElementById("loginForm")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const phone = loginPhone.value;
+  const password = loginPassword.value;
+  const email = phone + "@taf3el.com";
+  await signInWithEmailAndPassword(auth, email, password);
+  location.reload();
+});
+
+// AUTH STATE
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    authButtons.classList.add("hidden");
+    userProfile.classList.remove("hidden");
+    const snap = await getDoc(doc(db, "users", user.uid));
+    if (snap.exists()) {
+      userName.innerText = snap.data().name;
+      userPhone.innerText = snap.data().phone;
+      userBalance.innerText = snap.data().balance;
+    }
+  }
+});
+
+// LOGOUT
+window.logout = async () => {
+  await signOut(auth);
+  location.reload();
+};
+
+// SAVE ORDER
+window.handleServiceOrder = async (e) => {
+  e.preventDefault();
+  const user = auth.currentUser;
+  if (!user) return alert("Login first");
+
+  await addDoc(collection(db, "orders"), {
+    userId: user.uid,
+    service: serviceTitle.innerText,
+    link: contentLink.value,
+    quantity: quantity.value,
+    notes: orderNotes.value,
+    status: "pending",
+    createdAt: serverTimestamp()
+  });
+
+  alert("Order sent successfully");
+  closeServiceModal();
+};
+</script>
+<!-- ================= END FIREBASE ================= -->
+
 </body>
 </html>
